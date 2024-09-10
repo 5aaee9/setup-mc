@@ -29766,6 +29766,7 @@ const core = __importStar(__nccwpck_require__(9093));
 const tc = __importStar(__nccwpck_require__(5561));
 const io = __importStar(__nccwpck_require__(2826));
 const path = __importStar(__nccwpck_require__(1017));
+const os = __importStar(__nccwpck_require__(2037));
 const fs_1 = __nccwpck_require__(7147);
 const assert_1 = __nccwpck_require__(9491);
 const uuid_1 = __nccwpck_require__(720);
@@ -29776,10 +29777,26 @@ function _getTempDirectory() {
     (0, assert_1.ok)(tempDirectory, 'Expected RUNNER_TEMP to be defined');
     return tempDirectory;
 }
+const archMap = {
+    x64: 'amd64',
+    arm64: 'arm64',
+    arm: 'arm',
+};
+const osMap = {
+    win32: 'windows',
+    darwin: 'darwin',
+    linux: 'linux',
+};
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
+        const arch = archMap[os.arch()];
+        const system = osMap[process.platform];
         const version = core.getInput("version");
         let dir = tc.find(toolName, version);
+        let fileSuffix = "";
+        if (system === 'windows') {
+            fileSuffix = ".exe";
+        }
         if (!dir) {
             const cacheDir = path.join(_getTempDirectory(), (0, uuid_1.v4)());
             yield io.mkdirP(cacheDir);
@@ -29791,10 +29808,10 @@ function main() {
                 versionFileName = `mc.RELEASE.${version}`;
             }
             // TODO: support other arch and os
-            const dst = yield tc.downloadTool(`${baseMinioDownloadUrl}/linux-amd64/${versionFileName}`);
-            yield io.cp(dst, path.join(cacheDir, "mc"));
+            const dst = yield tc.downloadTool(`${baseMinioDownloadUrl}/${system}-${arch}/${versionFileName}${fileSuffix}`);
+            yield io.cp(dst, path.join(cacheDir, `mc${fileSuffix}`));
             dir = yield tc.cacheDir(cacheDir, toolName, version);
-            yield fs_1.promises.chmod(path.join(dir, "mc"), "755");
+            yield fs_1.promises.chmod(path.join(dir, `mc${fileSuffix}`), "755");
         }
         core.addPath(dir);
     });

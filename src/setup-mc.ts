@@ -2,6 +2,7 @@ import * as core from "@actions/core";
 import * as tc from '@actions/tool-cache'
 import * as io from '@actions/io'
 import * as path from 'path'
+import * as os from 'os'
 import { promises as fs } from 'fs'
 
 import { ok } from 'assert'
@@ -16,10 +17,28 @@ function _getTempDirectory(): string {
   return tempDirectory
 }
 
-async function main() {
-  const version = core.getInput("version")
+const archMap = {
+  x64: 'amd64',
+  arm64: 'arm64',
+  arm: 'arm',
+}
 
+const osMap = {
+  win32: 'windows',
+  darwin: 'darwin',
+  linux: 'linux',
+}
+
+async function main() {
+  const arch = archMap[os.arch()]
+  const system = osMap[process.platform]
+
+  const version = core.getInput("version")
   let dir = tc.find(toolName, version)
+  let fileSuffix = ""
+  if (system === 'windows') {
+    fileSuffix = ".exe"
+  }
 
   if (!dir) {
     const cacheDir = path.join(_getTempDirectory(), v4())
@@ -32,11 +51,11 @@ async function main() {
     }
 
     // TODO: support other arch and os
-    const dst = await tc.downloadTool(`${baseMinioDownloadUrl}/linux-amd64/${versionFileName}`)
+    const dst = await tc.downloadTool(`${baseMinioDownloadUrl}/${system}-${arch}/${versionFileName}${fileSuffix}`)
 
-    await io.cp(dst, path.join(cacheDir, "mc"))
+    await io.cp(dst, path.join(cacheDir, `mc${fileSuffix}`))
     dir = await tc.cacheDir(cacheDir, toolName, version)
-    await fs.chmod(path.join(dir, "mc"), "755")
+    await fs.chmod(path.join(dir, `mc${fileSuffix}`), "755")
   }
 
   core.addPath(dir)
