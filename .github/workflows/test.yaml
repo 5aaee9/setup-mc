@@ -1,0 +1,22 @@
+name: test
+
+on:
+  push:
+
+
+jobs:
+  test-latest:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup minio
+      uses: ./
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Minio version
+      run: |
+        mc -v
