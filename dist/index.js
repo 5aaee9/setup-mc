@@ -29766,6 +29766,7 @@ const core = __importStar(__nccwpck_require__(9093));
 const tc = __importStar(__nccwpck_require__(5561));
 const io = __importStar(__nccwpck_require__(2826));
 const path = __importStar(__nccwpck_require__(1017));
+const fs_1 = __nccwpck_require__(7147);
 const assert_1 = __nccwpck_require__(9491);
 const uuid_1 = __nccwpck_require__(720);
 const baseMinioDownloadUrl = "https://dl.min.io/client/mc/release";
@@ -29793,6 +29794,7 @@ function main() {
             const dst = yield tc.downloadTool(`${baseMinioDownloadUrl}/linux-amd64/${versionFileName}`);
             yield io.cp(dst, path.join(cacheDir, "mc"));
             dir = yield tc.cacheDir(cacheDir, toolName, version);
+            yield fs_1.promises.chmod(path.join(dir, "mc"), "755");
         }
         core.addPath(dir);
     });
