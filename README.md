@@ -19,6 +19,8 @@ Inputs:
 | `version` | `latest` | A release from `pgsty/mc`, e.g. `2026-09-16T00-00-00Z` or `RELEASE.2026-09-16T00-00-00Z`. |
 | `github-token` | `${{ github.token }}` | Token for GitHub release metadata. `GITHUB_TOKEN` in the environment is also accepted. |
 
+If GitHub rejects the supplied token with HTTP 401, the action retries the public release lookup once without authentication. Anonymous API requests have a lower rate limit; if that limit is reached, supply a valid GitHub token.
+
 Historical upstream MinIO versions are not automatically mapped to PGSTY releases. Pick a tag available in [PGSTY's releases](https://github.com/pgsty/mc/releases).
 
 Linux, macOS and Windows are supported on amd64 and arm64. Archives are checked against the GitHub asset SHA-256 digest, or the release checksum manifest when a digest is unavailable. Each resolved release has a separate tool-cache entry; `latest` is resolved on each invocation.

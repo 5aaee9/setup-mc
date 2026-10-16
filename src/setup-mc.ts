@@ -48,9 +48,23 @@ async function main() {
   const token = core.getInput('github-token') || process.env.GITHUB_TOKEN
   if (token) headers.Authorization = `Bearer ${token}`
   const endpoint = version === 'latest' ? 'latest' : `tags/${encodeURIComponent(tag)}`
-  const response = await fetch(`https://api.github.com/repos/${repository}/releases/${endpoint}`, { headers })
+  const url = `https://api.github.com/repos/${repository}/releases/${endpoint}`
+  let response = await fetch(url, { headers })
+  if (response.status === 401 && token) {
+    core.info('GitHub rejected the supplied token; retrying public release lookup without authentication')
+    await response.body?.cancel()
+    delete headers.Authorization
+    response = await fetch(url, { headers })
+  }
   if (!response.ok) {
-    throw new Error(`Unable to resolve ${repository} release ${version}: HTTP ${response.status}. Check that the version exists in https://github.com/${repository}/releases`)
+    const hint = response.status === 404
+      ? `Check that the version exists in https://github.com/${repository}/releases`
+      : response.status === 401
+        ? 'GitHub API authentication failed'
+        : response.status === 403 || response.status === 429
+          ? 'GitHub API access was denied or rate limited; provide a valid github-token with access to public repositories'
+          : 'GitHub API request failed; try again later'
+    throw new Error(`Unable to resolve ${repository} release ${version}: HTTP ${response.status}. ${hint}`)
   }
   const release = await response.json() as Release
   const match = /^RELEASE\.(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})Z$/.exec(release.tag_name)

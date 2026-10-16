@@ -25,7 +25,7 @@ async function run(options = {}) {
   let extracted = false
   const mocks = {
     '@actions/core': {
-      getInput: name => name === 'version' ? (options.version || 'latest') : 'test-token',
+      getInput: name => name === 'version' ? (options.version || 'latest') : (options.noToken ? '' : 'test-token'),
       info() {}, addPath: value => calls.paths.push(value), setFailed: value => calls.errors.push(value),
     },
     '@actions/tool-cache': {
@@ -46,8 +46,10 @@ async function run(options = {}) {
     require: name => mocks[name] || require(name),
     fetch: async (url, init) => {
       calls.urls.push(url)
-      assert.equal(init.headers.Authorization, 'Bearer test-token')
-      return { ok: !options.notFound, status: options.notFound ? 404 : 200, json: async () => release }
+      const firstRequest = calls.urls.length === 1
+      assert.equal(init.headers.Authorization, !options.noToken && firstRequest ? 'Bearer test-token' : undefined)
+      const status = options.rejectedToken && firstRequest ? 401 : options.status || (options.notFound ? 404 : 200)
+      return { ok: status === 200, status, json: async () => release }
     },
   }
   // Await main() and its error handler, which is the entry point's final expression.
@@ -98,6 +100,41 @@ test('rejects corrupted archives before extracting or caching', async () => {
   assert.equal(result.extracted, false)
   assert.deepEqual(result.paths, [])
   assert.equal(result.cache.length, 1)
+})
+
+test('retries rejected tokens anonymously for latest and pinned releases', async () => {
+  for (const version of ['latest', tag]) {
+    const result = await run({ rejectedToken: true, version })
+    assert.deepEqual(result.errors, [])
+    assert.equal(result.urls.length, 2)
+    assert.equal(result.urls[0], result.urls[1])
+    assert.deepEqual(result.paths, ['/cached'])
+  }
+})
+
+test('supports anonymous lookup without a token', async () => {
+  const result = await run({ noToken: true })
+  assert.deepEqual(result.errors, [])
+  assert.equal(result.urls.length, 1)
+})
+
+test('does not retry an anonymous authentication failure', async () => {
+  const result = await run({ noToken: true, status: 401 })
+  assert.equal(result.urls.length, 1)
+  assert.match(result.errors[0], /authentication failed/)
+})
+
+test('reports rate limiting after authentication fallback', async () => {
+  const result = await run({ rejectedToken: true, status: 403 })
+  assert.equal(result.urls.length, 2)
+  assert.match(result.errors[0], /rate limited/)
+  assert.deepEqual(result.downloads, [])
+})
+
+test('does not retry unrelated failures', async () => {
+  const result = await run({ status: 500 })
+  assert.equal(result.urls.length, 1)
+  assert.match(result.errors[0], /try again later/)
 })
 
 test('reports unavailable releases', async () => {
