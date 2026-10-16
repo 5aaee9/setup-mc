@@ -28830,6 +28830,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(9093));
+const http_client_1 = __nccwpck_require__(6634);
 const tc = __importStar(__nccwpck_require__(5561));
 const io = __importStar(__nccwpck_require__(2826));
 const path = __importStar(__nccwpck_require__(1017));
@@ -28847,9 +28848,21 @@ const osMap = {
     darwin: 'darwin',
     linux: 'linux',
 };
+function getReleaseResponse(url, headers) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const client = new http_client_1.HttpClient('setup-mc', [], { allowRetries: true, maxRetries: 2 });
+        try {
+            const response = yield client.get(url, headers);
+            return { status: response.message.statusCode, body: yield response.readBody() };
+        }
+        finally {
+            client.dispose();
+        }
+    });
+}
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c;
+        var _a, _b;
         const arch = archMap[os.arch()];
         const system = osMap[process.platform];
         if (!arch || !system) {
@@ -28866,14 +28879,13 @@ function main() {
             headers.Authorization = `Bearer ${token}`;
         const endpoint = version === 'latest' ? 'latest' : `tags/${encodeURIComponent(tag)}`;
         const url = `https://api.github.com/repos/${repository}/releases/${endpoint}`;
-        let response = yield fetch(url, { headers });
+        let response = yield getReleaseResponse(url, headers);
         if (response.status === 401 && token) {
             core.info('GitHub rejected the supplied token; retrying public release lookup without authentication');
-            yield ((_a = response.body) === null || _a === void 0 ? void 0 : _a.cancel());
             delete headers.Authorization;
-            response = yield fetch(url, { headers });
+            response = yield getReleaseResponse(url, headers);
         }
-        if (!response.ok) {
+        if (response.status !== 200) {
             const hint = response.status === 404
                 ? `Check that the version exists in https://github.com/${repository}/releases`
                 : response.status === 401
@@ -28883,7 +28895,7 @@ function main() {
                         : 'GitHub API request failed; try again later';
             throw new Error(`Unable to resolve ${repository} release ${version}: HTTP ${response.status}. ${hint}`);
         }
-        const release = yield response.json();
+        const release = JSON.parse(response.body);
         const match = /^RELEASE\.(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})Z$/.exec(release.tag_name);
         if (!match)
             throw new Error(`Unsupported release tag: ${release.tag_name}`);
@@ -28898,7 +28910,7 @@ function main() {
         if (!dir) {
             core.info(`Installing ${repository} ${release.tag_name} (${asset.name})`);
             const archive = yield tc.downloadTool(asset.browser_download_url);
-            let expectedHash = (_c = (_b = asset.digest) === null || _b === void 0 ? void 0 : _b.match(/^sha256:([a-f0-9]{64})$/i)) === null || _c === void 0 ? void 0 : _c[1];
+            let expectedHash = (_b = (_a = asset.digest) === null || _a === void 0 ? void 0 : _a.match(/^sha256:([a-f0-9]{64})$/i)) === null || _b === void 0 ? void 0 : _b[1];
             if (!expectedHash) {
                 const checksumName = asset.name.slice(0, -suffix.length) + '_checksums.txt';
                 const checksums = release.assets.find(asset => asset.name === checksumName);

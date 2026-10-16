@@ -1,4 +1,5 @@
 import * as core from '@actions/core'
+import { HttpClient } from '@actions/http-client'
 import * as tc from '@actions/tool-cache'
 import * as io from '@actions/io'
 import * as path from 'path'
@@ -31,6 +32,16 @@ const osMap: Record<string, string> = {
   linux: 'linux',
 }
 
+async function getReleaseResponse(url: string, headers: Record<string, string>) {
+  const client = new HttpClient('setup-mc', [], { allowRetries: true, maxRetries: 2 })
+  try {
+    const response = await client.get(url, headers)
+    return { status: response.message.statusCode, body: await response.readBody() }
+  } finally {
+    client.dispose()
+  }
+}
+
 async function main() {
   const arch = archMap[os.arch()]
   const system = osMap[process.platform]
@@ -49,14 +60,13 @@ async function main() {
   if (token) headers.Authorization = `Bearer ${token}`
   const endpoint = version === 'latest' ? 'latest' : `tags/${encodeURIComponent(tag)}`
   const url = `https://api.github.com/repos/${repository}/releases/${endpoint}`
-  let response = await fetch(url, { headers })
+  let response = await getReleaseResponse(url, headers)
   if (response.status === 401 && token) {
     core.info('GitHub rejected the supplied token; retrying public release lookup without authentication')
-    await response.body?.cancel()
     delete headers.Authorization
-    response = await fetch(url, { headers })
+    response = await getReleaseResponse(url, headers)
   }
-  if (!response.ok) {
+  if (response.status !== 200) {
     const hint = response.status === 404
       ? `Check that the version exists in https://github.com/${repository}/releases`
       : response.status === 401
@@ -66,7 +76,7 @@ async function main() {
           : 'GitHub API request failed; try again later'
     throw new Error(`Unable to resolve ${repository} release ${version}: HTTP ${response.status}. ${hint}`)
   }
-  const release = await response.json() as Release
+  const release = JSON.parse(response.body) as Release
   const match = /^RELEASE\.(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})Z$/.exec(release.tag_name)
   if (!match) throw new Error(`Unsupported release tag: ${release.tag_name}`)
   // The tool cache requires a concrete semver, not "latest" or a RELEASE timestamp.

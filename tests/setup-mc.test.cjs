@@ -28,6 +28,18 @@ async function run(options = {}) {
       getInput: name => name === 'version' ? (options.version || 'latest') : (options.noToken ? '' : 'test-token'),
       info() {}, addPath: value => calls.paths.push(value), setFailed: value => calls.errors.push(value),
     },
+    '@actions/http-client': {
+      HttpClient: class {
+        async get(url, headers) {
+          calls.urls.push(url)
+          const firstRequest = calls.urls.length === 1
+          assert.equal(headers.Authorization, !options.noToken && firstRequest ? 'Bearer test-token' : undefined)
+          const status = options.rejectedToken && firstRequest ? 401 : options.status || (options.notFound ? 404 : 200)
+          return { message: { statusCode: status }, readBody: async () => JSON.stringify(release) }
+        }
+        dispose() {}
+      },
+    },
     '@actions/tool-cache': {
       find: (...args) => { calls.cache.push(args); return options.cached ? '/cached' : '' },
       downloadTool: async url => { calls.downloads.push(url); return url.endsWith('checksums') ? '/checksums' : '/archive' },
@@ -44,14 +56,8 @@ async function run(options = {}) {
   const context = {
     exports: {}, process: { platform, env: {} },
     require: name => mocks[name] || require(name),
-    fetch: async (url, init) => {
-      calls.urls.push(url)
-      const firstRequest = calls.urls.length === 1
-      assert.equal(init.headers.Authorization, !options.noToken && firstRequest ? 'Bearer test-token' : undefined)
-      const status = options.rejectedToken && firstRequest ? 401 : options.status || (options.notFound ? 404 : 200)
-      return { ok: status === 200, status, json: async () => release }
-    },
   }
+  assert.equal(vm.runInNewContext('typeof fetch', context), 'undefined')
   // Await main() and its error handler, which is the entry point's final expression.
   await vm.runInNewContext(code, context)
   return { ...calls, extracted }
