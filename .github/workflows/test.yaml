@@ -2,21 +2,32 @@ name: test
 
 on:
   push:
+  pull_request:
 
+permissions:
+  contents: read
 
 jobs:
-  test-latest:
+  test:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
+        os: [ubuntu-latest, macos-latest, macos-15-intel, windows-latest]
+        version: [latest, 'RELEASE.2026-09-16T00-00-00Z']
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup minio
-      uses: ./
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Minio version
-      run: |
-        mc -v
+      - uses: actions/checkout@v4
+      - name: Setup PGSTY client
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+      - name: Verify both command names
+        run: |
+          mc --version
+          mcli --version
+      - name: Verify cached installation
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+      - name: Verify cached command
+        run: mc --version

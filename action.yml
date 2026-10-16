@@ -1,5 +1,5 @@
 name: 'Setup Minio Client'
-description: 'Setup the minio client (mc) on GitHub Actions'
+description: 'Setup the PGSTY-maintained MinIO/Silo client as mc and mcli on GitHub Actions'
 
 branding:
   icon: 'play'
@@ -7,9 +7,13 @@ branding:
 
 inputs:
   version:
-    description: 'Minio client version, use latest to fetch latest version'
+    description: 'PGSTY mc release timestamp (with or without RELEASE. prefix), or latest'
     required: false
     default: 'latest'
+  github-token:
+    description: 'GitHub token used to resolve PGSTY releases'
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: 'node20'
